@@ -6,12 +6,12 @@ namespace test_functions {
   }
 
   double func_02(double a) {
-    double b = 2 * a;
+    double b = a * a;
     return b * b;
   }
 
   double func_03(double a) {
-    a = 2 * a;
+    a = a * a;
     return a * a;
   }
 }

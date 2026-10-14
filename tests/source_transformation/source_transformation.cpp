@@ -8,6 +8,7 @@
 #include "../autograd.h"
 
 #include <fstream>
+#include <ranges>
 
 using namespace std::meta;
 
@@ -120,6 +121,59 @@ struct ExpressionAnalysis {
 
     return std::define_static_string(r);
   }
+
+  static consteval std::vector<std::string> listOverwrites(info e) {
+    info exp = ad::detail::stripCasts(e); // TODO: Handle casts.
+
+    std::vector<std::string> list = {};
+    if (is_binary_operator(exp)) {
+      auto operands = operands_of(exp);
+      OperatorInfo op = getOperatorInfo(expression_operator_of(exp));
+      if (op.kind == OperatorKind::Assign) {
+        list.push_back(ExpressionAnalysis::generatePrimal(operands[0]));
+      }
+    } else if (is_literal(exp)) {
+      // Nothing
+    } else if (is_variable_reference(exp)) {
+      // Nothing
+    } else {
+      throwKind(exp);
+    }
+
+    return list;
+  }
+
+  static consteval void generateReverse(info e, std::string adj, std::vector<std::string>& rev_updates, std::vector<std::string>& lhs_values) {
+    info exp = ad::detail::stripCasts(e); // TODO: Handle casts.
+
+    if (is_binary_operator(exp)) {
+      auto operands = operands_of(exp);
+      OperatorInfo op = getOperatorInfo(expression_operator_of(exp));
+
+      if (op.kind == OperatorKind::Assign) {
+        if (!adj.empty()) {
+          throw "Adjoint needs to be zero for assignment operators.";
+        }
+
+        std::string adj = join(generatePrimal(operands[0]), "_b"); // TODO: Remove shortcut that might fail  e.g. a[0] -> a[0]_b
+        generateReverse(operands[1], adj, rev_updates, lhs_values);
+        lhs_values.push_back(adj);
+      } else if (op.kind == OperatorKind::Mul) {
+        generateReverse(operands[0], join("(", generatePrimal(operands[1]), ") * ", adj), rev_updates, lhs_values);
+        generateReverse(operands[1], join("(", generatePrimal(operands[0]), ") * ", adj), rev_updates, lhs_values);
+      } else {
+        throw "Unkown operator";
+      }
+    } else if (is_literal(exp)) {
+      // Nothing
+    } else if (is_variable_reference(exp)) {
+      rev_updates.push_back(join(identifier_of(declaration_of(exp)), "_b += ", adj));
+    } else {
+      throwKind(exp);
+    }
+  }
+
+
 };
 
 struct StatementAnalysis {
@@ -176,7 +230,91 @@ struct StatementAnalysis {
     }
     return std::define_static_string(r);
   }
+
+  static consteval std::ranges::range_value_t<std::string&> const* generateStore(info stmt, GenerationContext& ctx) {
+    std::string r = "";
+    if (is_declaration_statement(stmt)) {
+      // Nothing
+    } else if (is_expression_statement(stmt)) {
+      std::vector<std::string> overwrites = ExpressionAnalysis::listOverwrites(expression_of(stmt));
+      for (std::string cur : overwrites) {
+        r += ctx.format(join("store(", cur, ");\n"));
+      }
+    } else if (is_return_statement(stmt)) {
+      // Nothing
+    } else {
+      throwKind(stmt);
+    }
+    return std::define_static_string(r);
+  }
+
+  static consteval std::ranges::range_value_t<std::string&> const* generateRestore(info stmt, GenerationContext& ctx) {
+    std::string r = "";
+    if (is_declaration_statement(stmt)) {
+      // Nothing
+    } else if (is_expression_statement(stmt)) {
+      std::vector<std::string> overwrites = ExpressionAnalysis::listOverwrites(expression_of(stmt));
+      for (std::string cur : overwrites | std::views::reverse) {
+        r += ctx.format(join("restore(", cur, ");\n"));
+      }
+    } else if (is_return_statement(stmt)) {
+      // Nothing
+    } else {
+      throwKind(stmt);
+    }
+    return std::define_static_string(r);
+  }
+
+  static consteval std::ranges::range_value_t<std::string&> const* generateReverse(info stmt, GenerationContext& ctx) {
+    std::string r = "";
+    std::vector<std::string> reverse_stmts = {};
+    std::vector<std::string> lhs_values = {};
+    if (is_declaration_statement(stmt)) {
+      info v = declared_variable_of(stmt);
+      std::string adj = join(identifier_of(v), "_b");
+      ExpressionAnalysis::generateReverse(initializer_of(v), adj, reverse_stmts, lhs_values);
+      lhs_values.push_back(adj);
+    } else if (is_expression_statement(stmt)) {
+      ExpressionAnalysis::generateReverse(expression_of(stmt), "", reverse_stmts, lhs_values);
+    } else if (is_return_statement(stmt)) {
+      std::string adj = "ret_b";
+      ExpressionAnalysis::generateReverse(return_value_of(stmt), adj, reverse_stmts, lhs_values);
+      lhs_values.push_back(adj);
+    } else {
+      throwKind(stmt);
+    }
+
+    for (std::string cur : reverse_stmts) {
+      r += ctx.format(join(cur, ";\n"));
+    }
+    for (std::string cur : lhs_values) {
+      r += ctx.format(join(cur, " = 0.0;\n"));
+    }
+
+    return std::define_static_string(r);
+  }
+
+  static consteval std::ranges::range_value_t<std::string&> const* generateReverseDecl(info stmt, GenerationContext& ctx) {
+    std::string r = "";
+    if (is_declaration_statement(stmt)) {
+      info v = declared_variable_of(stmt);
+      r += ctx.format(join(
+        display_string_of(type_of(v)),
+        " ",
+        identifier_of(v),
+        "_b = 0.0;\n"));
+    } else if (is_expression_statement(stmt)) {
+      // Nothing
+    } else if (is_return_statement(stmt)) {
+      // Nothing
+    } else {
+      throwKind(stmt);
+    }
+
+    return std::define_static_string(r);
+  }
 };
+
 
 struct FunctionAnalysis {
   static consteval auto generatePrimal(info func) {
@@ -227,6 +365,50 @@ struct FunctionAnalysis {
 
     return std::define_static_string(r);
   }
+
+  static consteval auto generateReverseJoined(info func) {
+    GenerationContext ctx = {};
+    std::string r = "";
+    info ret_type = return_type_of(func);
+    auto params = parameters_of(func);
+
+    std::string params_s = "";
+    for (info p : params) {
+      params_s += join(
+        params_s.size() ? ", " : "",
+        display_string_of(type_of(p)), " ", identifier_of(p), ", ",
+        display_string_of(type_of(p)), "& ", identifier_of(p), "_b");
+    }
+    if (!is_void_type(ret_type)) {
+      params_s += join(
+        params_s.size() ? ", " : "",
+        display_string_of(ret_type), " ret_b");
+    }
+
+    // Reverse functions do not return values.
+    r += join("void ", identifier_of(func), "_b(", params_s, ") {\n");
+
+    ctx.addIndent();
+    for (info stmt : statements_of(body_of(func))) {
+      if (is_return_statement(stmt)) {
+        // Handling of return statements is not required.
+        continue;
+      }
+
+      r += StatementAnalysis::generateStore(stmt, ctx);
+      r += StatementAnalysis::generateReverseDecl(stmt, ctx);
+      r += StatementAnalysis::generatePrimal(stmt, ctx);
+    }
+
+    for (info stmt : statements_of(body_of(func)) | std::views::reverse ) {
+      r += StatementAnalysis::generateRestore(stmt, ctx);
+      r += StatementAnalysis::generateReverse(stmt, ctx);
+    }
+    ctx.removeIndent();
+    r += "}\n";
+
+    return std::define_static_string(r);
+  }
 };
 
 int main(int nargs, char** args) {
@@ -245,6 +427,7 @@ int main(int nargs, char** args) {
     if (is_function(member)) {
       out << FunctionAnalysis::generatePrimal(member) << std::endl;
       out << FunctionAnalysis::generateForward(member) << std::endl;
+      out << FunctionAnalysis::generateReverseJoined(member) << std::endl;
     }
   }
 
