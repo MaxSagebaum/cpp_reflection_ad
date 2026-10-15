@@ -401,6 +401,8 @@ struct FunctionAnalysis {
     }
 
     for (info stmt : statements_of(body_of(func)) | std::views::reverse ) {
+      r += "\n";
+      r += join("//", StatementAnalysis::generatePrimal(stmt, ctx));
       r += StatementAnalysis::generateRestore(stmt, ctx);
       r += StatementAnalysis::generateReverse(stmt, ctx);
     }
