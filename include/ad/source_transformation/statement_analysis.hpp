@@ -64,9 +64,19 @@ struct StatementAnalysis {
           rhs.primal, ";"));
       }
     } else if (m::is_expression_statement(stmt)) {
-      ForwardExpression rhs = ExpressionAnalysis::generateForward(expression_of(stmt), ctx);
+      info exp = expression_of(stmt);
+      bool is_func_call = m::is_operator_expression(exp) &&
+        operands_of(exp).size() == 2 &&
+          getOperatorInfo(m::expression_operator_of(exp)).kind == OperatorKind::Assign &&
+            m::is_function_call(operands_of(exp)[1]);
+
+      ForwardExpression rhs = ExpressionAnalysis::generateForward(exp, ctx);
       ctx.addStatement(rhs.fwd + ";");
-      ctx.addStatement(rhs.primal + ";");
+
+      // Function calls are optimized, so we can omit the primal statement.
+      if (!is_func_call) {
+        ctx.addStatement(rhs.primal + ";");
+      }
     } else if (m::is_return_statement(stmt)) {
       ForwardExpression ret = ExpressionAnalysis::generateForward(return_operand_of(stmt), ctx);
 

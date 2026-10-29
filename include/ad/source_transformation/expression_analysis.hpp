@@ -78,7 +78,7 @@ struct ExpressionAnalysis {
       ForwardExpression op0 = ExpressionAnalysis::generateForward(operands[0], ctx);
 
       if (op.kind == OperatorKind::Assign && m::is_function_call(operands[1])) {
-        ForwardExpression rhs = ExpressionAnalysis::generateForwardFunctionCall(initializer_of(operands[1]), ctx);
+        ForwardExpression rhs = ExpressionAnalysis::generateForwardFunctionCall(operands[1], ctx);
         r.primal = su::join(op0.primal, " = ", rhs.primal);
         r.fwd = su::join("[", op0.primal, ", ", op0.fwd, "_d] = ", rhs.fwd);
       } else {
