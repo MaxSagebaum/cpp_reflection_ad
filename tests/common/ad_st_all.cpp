@@ -1,4 +1,5 @@
 #include "../fixtures/functions/st_functions.hpp"
+#include "source_transformation/string_compare.hpp"
 #include "test_simple_include.hpp"
 
 #include <ad/source_transformation/source_transformation.hpp>
@@ -22,28 +23,15 @@ int main(int nargs, char** args) {
 
   std::stringstream data = {};
 
-  static constexpr auto members = std::define_static_array(ad::m::members_of( ^^test_functions, ad::m::access_context::unchecked() ));
-
-  template for (constexpr auto member : members) {
-    if (is_function(member)) {
-      data << ad::FunctionAnalysis::generatePrimal(member) << std::endl;
-      data << ad::FunctionAnalysis::generateForward(member) << std::endl;
-      data << ad::FunctionAnalysis::generateReverseJoined(member) << std::endl;
-    }
-  }
+  ad::handleNamespace<^^test_functions>(data);
 
   std::ofstream out(filename);
   out << data.str();
   out.close();
 
   std::string result_str = results;
-  size_t min_size = std::min(data.str().size(), result_str.size());
-  for (size_t i = 0; i < min_size; i += 1) {
-    if (data.str()[i] != result_str[i]) {
-      std::cout << std::format("Difference at: {} ('{}' <-> '{}')", i, data.str()[i], result_str[i]) << std::endl;
-    }
-  }
-  EXPECT_EQUAL_ARRAY(data.str(), result_str);
+  stringCompare(data.str(), result_str);
+
   std::cout << result_str << std::endl;
 
   TEST_END;
