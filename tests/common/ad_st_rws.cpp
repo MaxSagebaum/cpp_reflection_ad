@@ -32,7 +32,5 @@ int main(int nargs, char** args) {
   std::string result_str = results;
   stringCompare(data.str(), result_str);
 
-  std::cout << result_str << std::endl;
-
   TEST_END;
 }

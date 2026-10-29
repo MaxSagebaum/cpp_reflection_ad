@@ -1,9 +1,11 @@
 #pragma once
 
-#include <sstream>
+#include "generation_context.hpp"
+
 #include <fstream>
-#include <ranges>
 #include <iostream>
+#include <ranges>
+#include <sstream>
 
 #include "../autograd.h"
 #include "../meta.h"
@@ -15,6 +17,11 @@ namespace ad {
 using std::meta::info;
 namespace m = ad::meta;
 namespace su = ad::string_util;
+
+struct ForwardExpression {
+  std::string primal;
+  std::string fwd;
+};
 
 struct ExpressionAnalysis {
   static consteval std::ranges::range_value_t<std::string&> const* generatePrimal(info e) {
@@ -39,6 +46,16 @@ struct ExpressionAnalysis {
       r += m::display_string_of(constant_of(exp));
     } else if (m::is_id_expression(exp)) {
       r += identifier_of(declaration_of(exp));
+    } else if (m::is_function_call(exp)) {
+      auto ops = m::operands_of(e);
+      std::string_view name = m::identifier_of(m::declaration_of(m::callee_of(exp)));
+
+      std::string ops_s = "";
+      for (info o : ops) {
+        ops_s += su::join(ops_s.size() ? ", " : "", ExpressionAnalysis::generatePrimal(o));
+      }
+
+      r += su::join(name, "(", ops_s , ")");
     } else {
       throwKind(exp);
     }
@@ -46,10 +63,10 @@ struct ExpressionAnalysis {
     return std::define_static_string(r);
   }
 
-  static consteval std::ranges::range_value_t<std::string&> const* generateForward(info e) {
+  static consteval ForwardExpression generateForward(info e, GenerationContext& ctx) {
     info exp = ad::detail::stripCasts(e); // TODO: Handle casts.
 
-    std::string r = "";
+    ForwardExpression r = {};
     if (m::is_operator_expression(exp)) {
       auto operands = operands_of(exp);
 
@@ -59,36 +76,57 @@ struct ExpressionAnalysis {
 
       OperatorInfo op = getOperatorInfo(m::expression_operator_of(exp));
 
+      ForwardExpression op0 = ExpressionAnalysis::generateForward(operands[0], ctx);
+      ForwardExpression op1 = ExpressionAnalysis::generateForward(operands[1], ctx);
+
       if (op.kind == OperatorKind::Assign) {
-        r += su::join(
-          ExpressionAnalysis::generateForward(operands[0]),
+        r.primal = su::join(op0.primal, " = " , op1.primal);
+        r.fwd += su::join(
+          op0.fwd,
           " ",
           op.symbol,
           " ",
-          ExpressionAnalysis::generateForward(operands[1]));
+          op1.fwd);
       } else if (op.kind == OperatorKind::Mul) {
-        r += su::join(
+        r.primal = su::join(op0.primal, " * " , op1.primal);
+        r.fwd += su::join(
           "(",
-          ExpressionAnalysis::generatePrimal(operands[0]),
+          op0.primal,
           ") * (",
-          ExpressionAnalysis::generateForward(operands[1]),
+          op1.fwd,
           ") + (",
-          ExpressionAnalysis::generateForward(operands[0]),
+          op0.fwd,
           ") * (",
-          ExpressionAnalysis::generatePrimal(operands[1]),
+          op1.primal,
           ")");
       } else {
         throw "Unkown operator";
       }
     } else if (m::is_literal(exp)) {
-      r += "0.0";
+      r.primal = generatePrimal(exp);
+      r.fwd += "0.0";
     } else if (m::is_id_expression(exp)) {
-      r += su::join(identifier_of(declaration_of(exp)), "_d");
+      r.primal = generatePrimal(exp);
+      r.fwd = su::join(r.primal, "_d");
+    } else if (m::is_function_call(exp)) {
+      auto ops = m::operands_of(e);
+      std::string_view name = m::identifier_of(m::declaration_of(m::callee_of(exp)));
+
+      std::string ops_s = "";
+      for (info o : ops) {
+        ForwardExpression o_exp = ExpressionAnalysis::generateForward(o, ctx);
+        ops_s += su::join(ops_s.size() ? ", " : "", o_exp.primal, ", ", o_exp.fwd);
+      }
+
+      r.primal = ctx.generateTemporary();
+      r.fwd = su::join(r.primal, "_d");
+      std::string call = su::join("auto [", r.primal, ", ", r.fwd, "] = ", name, "(", ops_s , ");");
+      ctx.addStatement(call);
     } else {
       throwKind(exp);
     }
 
-    return std::define_static_string(r);
+    return r;
   }
 
   static consteval std::vector<std::string> listOverwrites(info e) {

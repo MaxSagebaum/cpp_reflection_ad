@@ -62,8 +62,9 @@ struct FunctionAnalysis {
 
     ctx.addIndent();
     for (info stmt : m::statements_of(m::body_of(func))) {
-      r += StatementAnalysis::generateForward(stmt, ctx);
+      StatementAnalysis::generateForward(stmt, ctx);
     }
+    r += ctx.flushStatements();
     ctx.removeIndent();
     r += "}\n";
 

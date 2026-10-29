@@ -39,36 +39,39 @@ struct StatementAnalysis {
     return std::define_static_string(r);
   }
 
-  static consteval std::ranges::range_value_t<std::string&> const* generateForward(info stmt, GenerationContext& ctx) {
-    std::string r = "";
-    bool add_primal = true;
+  static consteval void generateForward(info stmt, GenerationContext& ctx) {
     if (m::is_declaration_statement(stmt)) {
       info v = declared_variable_of(stmt);
-      r += ctx.format(su::join(
+      ForwardExpression rhs = ExpressionAnalysis::generateForward(initializer_of(v), ctx);
+
+      ctx.addStatement(su::join(
         m::display_string_of(m::type_of(v)),
         " ",
         m::identifier_of(v), "_d",
         " = ",
-        ExpressionAnalysis::generateForward(initializer_of(v))));
+        rhs.fwd, ";"));
+      ctx.addStatement(su::join(
+        m::display_string_of(m::type_of(v)),
+        " ",
+        m::identifier_of(v),
+        " = ",
+        rhs.primal, ";"));
     } else if (m::is_expression_statement(stmt)) {
-      r += ctx.format(ExpressionAnalysis::generateForward(expression_of(stmt)));
+      ForwardExpression rhs = ExpressionAnalysis::generateForward(expression_of(stmt), ctx);
+      ctx.addStatement(rhs.fwd + ";");
+      ctx.addStatement(rhs.primal + ";");
     } else if (m::is_return_statement(stmt)) {
-      r += ctx.format(su::join(
+      ForwardExpression ret = ExpressionAnalysis::generateForward(return_operand_of(stmt), ctx);
+
+      ctx.addStatement(su::join(
         "return std::make_pair(",
-        ExpressionAnalysis::generatePrimal(return_operand_of(stmt)),
+        ret.primal,
         ", ",
-        ExpressionAnalysis::generateForward(return_operand_of(stmt)),
-        ")"));
-      add_primal = false;
+        ret.fwd,
+        ");"));
     } else {
       throwKind(stmt);
     }
-
-    r += ";\n";
-    if (add_primal) {
-      r += generatePrimal(stmt, ctx);
-    }
-    return std::define_static_string(r);
   }
 
   static consteval std::ranges::range_value_t<std::string&> const* generateStore(info stmt, GenerationContext& ctx) {
