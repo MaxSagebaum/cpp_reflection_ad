@@ -42,20 +42,27 @@ struct StatementAnalysis {
   static consteval void generateForward(info stmt, GenerationContext& ctx) {
     if (m::is_declaration_statement(stmt)) {
       info v = declared_variable_of(stmt);
-      ForwardExpression rhs = ExpressionAnalysis::generateForward(initializer_of(v), ctx);
+      std::string_view type_name = m::display_string_of(m::type_of(v));
+      std::string_view var_name = m::identifier_of(v);
 
-      ctx.addStatement(su::join(
-        m::display_string_of(m::type_of(v)),
-        " ",
-        m::identifier_of(v), "_d",
-        " = ",
-        rhs.fwd, ";"));
-      ctx.addStatement(su::join(
-        m::display_string_of(m::type_of(v)),
-        " ",
-        m::identifier_of(v),
-        " = ",
-        rhs.primal, ";"));
+      if (m::is_function_call(initializer_of(v))) {
+        ForwardExpression rhs = ExpressionAnalysis::generateForwardFunctionCall(initializer_of(v), ctx);
+        ctx.addStatement(su::join("auto [", var_name, ", ", var_name, "_d] = ", rhs.fwd, ";"));
+      } else {
+        ForwardExpression rhs = ExpressionAnalysis::generateForward(initializer_of(v), ctx);
+        ctx.addStatement(su::join(
+          type_name,
+          " ",
+          var_name, "_d",
+          " = ",
+          rhs.fwd, ";"));
+        ctx.addStatement(su::join(
+          type_name,
+          " ",
+          var_name,
+          " = ",
+          rhs.primal, ";"));
+      }
     } else if (m::is_expression_statement(stmt)) {
       ForwardExpression rhs = ExpressionAnalysis::generateForward(expression_of(stmt), ctx);
       ctx.addStatement(rhs.fwd + ";");

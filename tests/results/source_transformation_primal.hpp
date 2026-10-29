@@ -16,3 +16,4 @@ double func_04(double a) {
   double b = func_call(a);
   return b * a;
 }
+

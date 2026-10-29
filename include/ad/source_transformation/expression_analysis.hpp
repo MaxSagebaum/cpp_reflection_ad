@@ -75,32 +75,38 @@ struct ExpressionAnalysis {
       }
 
       OperatorInfo op = getOperatorInfo(m::expression_operator_of(exp));
-
       ForwardExpression op0 = ExpressionAnalysis::generateForward(operands[0], ctx);
-      ForwardExpression op1 = ExpressionAnalysis::generateForward(operands[1], ctx);
 
-      if (op.kind == OperatorKind::Assign) {
-        r.primal = su::join(op0.primal, " = " , op1.primal);
-        r.fwd += su::join(
-          op0.fwd,
-          " ",
-          op.symbol,
-          " ",
-          op1.fwd);
-      } else if (op.kind == OperatorKind::Mul) {
-        r.primal = su::join(op0.primal, " * " , op1.primal);
-        r.fwd += su::join(
-          "(",
-          op0.primal,
-          ") * (",
-          op1.fwd,
-          ") + (",
-          op0.fwd,
-          ") * (",
-          op1.primal,
-          ")");
+      if (op.kind == OperatorKind::Assign && m::is_function_call(operands[1])) {
+        ForwardExpression rhs = ExpressionAnalysis::generateForwardFunctionCall(initializer_of(operands[1]), ctx);
+        r.primal = su::join(op0.primal, " = ", rhs.primal);
+        r.fwd = su::join("[", op0.primal, ", ", op0.fwd, "_d] = ", rhs.fwd);
       } else {
-        throw "Unkown operator";
+        ForwardExpression op1 = ExpressionAnalysis::generateForward(operands[1], ctx);
+
+        if (op.kind == OperatorKind::Assign) {
+          r.primal = su::join(op0.primal, " = " , op1.primal);
+          r.fwd += su::join(
+            op0.fwd,
+            " ",
+            op.symbol,
+            " ",
+            op1.fwd);
+        } else if (op.kind == OperatorKind::Mul) {
+          r.primal = su::join(op0.primal, " * " , op1.primal);
+          r.fwd += su::join(
+            "(",
+            op0.primal,
+            ") * (",
+            op1.fwd,
+            ") + (",
+            op0.fwd,
+            ") * (",
+            op1.primal,
+            ")");
+        } else {
+          throw "Unkown operator";
+        }
       }
     } else if (m::is_literal(exp)) {
       r.primal = generatePrimal(exp);
@@ -109,22 +115,33 @@ struct ExpressionAnalysis {
       r.primal = generatePrimal(exp);
       r.fwd = su::join(r.primal, "_d");
     } else if (m::is_function_call(exp)) {
-      auto ops = m::operands_of(e);
-      std::string_view name = m::identifier_of(m::declaration_of(m::callee_of(exp)));
-
-      std::string ops_s = "";
-      for (info o : ops) {
-        ForwardExpression o_exp = ExpressionAnalysis::generateForward(o, ctx);
-        ops_s += su::join(ops_s.size() ? ", " : "", o_exp.primal, ", ", o_exp.fwd);
-      }
-
+      ForwardExpression call_exp = generateForwardFunctionCall(exp, ctx);
       r.primal = ctx.generateTemporary();
       r.fwd = su::join(r.primal, "_d");
-      std::string call = su::join("auto [", r.primal, ", ", r.fwd, "] = ", name, "(", ops_s , ");");
+      std::string call = su::join("auto [", r.primal, ", ", r.fwd, "] = ", call_exp.fwd,";");
       ctx.addStatement(call);
     } else {
       throwKind(exp);
     }
+
+    return r;
+  }
+
+  static consteval ForwardExpression generateForwardFunctionCall(info exp, GenerationContext& ctx) {
+    ForwardExpression r = {};
+    auto ops = m::operands_of(exp);
+    std::string_view name = m::identifier_of(m::declaration_of(m::callee_of(exp)));
+
+    std::string ops_s_primal = "";
+    std::string ops_s_fwd = "";
+    for (info o : ops) {
+      ForwardExpression o_exp = ExpressionAnalysis::generateForward(o, ctx);
+      ops_s_primal += su::join(ops_s_primal.size() ? ", " : "", o_exp.primal);
+      ops_s_fwd += su::join(ops_s_fwd.size() ? ", " : "", o_exp.primal, ", ", o_exp.fwd);
+    }
+
+    r.primal = su::join( name, "(", ops_s_primal , ")");
+    r.fwd = su::join( name, "_d(", ops_s_fwd , ")");
 
     return r;
   }
