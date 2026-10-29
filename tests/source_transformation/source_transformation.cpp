@@ -1,14 +1,22 @@
+#include <sstream>
+#include <fstream>
+#include <ranges>
 #include <iostream>
 #include <meta>
 
-#include "throwHelper.hpp"
 #include "test_functions.hpp"
+#include "test_simple_include.hpp"
+#include "throwHelper.hpp"
 
-#include "../../clang-p2996/clang/include/clang/Tooling/Syntax/Nodes.h"
+
 #include "../autograd.h"
 
-#include <fstream>
-#include <ranges>
+
+char const results[] =
+{
+  #embed "results/base.hpp"
+  ,'\0'
+};
 
 using namespace std::meta;
 
@@ -421,19 +429,31 @@ int main(int nargs, char** args) {
     filename = args[1];
   }
 
-  std::ofstream out(filename);
+  std::stringstream data = {};
 
   static constexpr auto members = std::define_static_array(members_of( ^^test_functions, access_context::unchecked() ));
 
   template for (constexpr auto member : members) {
     if (is_function(member)) {
-      out << FunctionAnalysis::generatePrimal(member) << std::endl;
-      out << FunctionAnalysis::generateForward(member) << std::endl;
-      out << FunctionAnalysis::generateReverseJoined(member) << std::endl;
+      data << FunctionAnalysis::generatePrimal(member) << std::endl;
+      data << FunctionAnalysis::generateForward(member) << std::endl;
+      data << FunctionAnalysis::generateReverseJoined(member) << std::endl;
     }
   }
 
+  std::ofstream out(filename);
+  out << data.str();
   out.close();
 
-  return 0;
+  std::string result_str = results;
+  size_t min_size = std::min(data.str().size(), result_str.size());
+  for (size_t i = 0; i < min_size; i += 1) {
+    if (data.str()[i] != result_str[i]) {
+      std::cout << std::format("Difference at: {} ('{}' <-> '{}')", i, data.str()[i], result_str[i]) << std::endl;
+    }
+  }
+  EXPECT_EQUAL_ARRAY(data.str(), result_str);
+  std::cout << result_str << std::endl;
+
+  TEST_END;
 }
