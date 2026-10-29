@@ -22,13 +22,13 @@ int main(int nargs, char** args) {
 
   std::stringstream data = {};
 
-  static constexpr auto members = std::define_static_array(members_of( ^^test_functions, access_context::unchecked() ));
+  static constexpr auto members = std::define_static_array(ad::m::members_of( ^^test_functions, ad::m::access_context::unchecked() ));
 
   template for (constexpr auto member : members) {
     if (is_function(member)) {
-      data << FunctionAnalysis::generatePrimal(member) << std::endl;
-      data << FunctionAnalysis::generateForward(member) << std::endl;
-      data << FunctionAnalysis::generateReverseJoined(member) << std::endl;
+      data << ad::FunctionAnalysis::generatePrimal(member) << std::endl;
+      data << ad::FunctionAnalysis::generateForward(member) << std::endl;
+      data << ad::FunctionAnalysis::generateReverseJoined(member) << std::endl;
     }
   }
 
