@@ -8,7 +8,7 @@
 #pragma clang diagnostic ignored "-Wc23-extensions"
 char const results[] =
 {
-#embed "../results/source_transformation.hpp"
+#embed "../results/source_transformation_rws.hpp"
   ,'\0'
 };
 #pragma clang diagnostic pop
@@ -23,7 +23,7 @@ int main(int nargs, char** args) {
 
   std::stringstream data = {};
 
-  ad::handleNamespace<^^test_functions>(data);
+  ad::handleNamespaceReverse<^^test_functions>(data);
 
   std::ofstream out(filename);
   out << data.str();
