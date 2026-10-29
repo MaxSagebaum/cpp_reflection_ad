@@ -12,10 +12,10 @@ consteval void throwKind(std::meta::info i) {
 //  else if(is_array_type(i)) { throw "array_type"; }
   else if(is_assignment(i)) { throw "assignment"; }
   else if(is_base(i)) { throw "base"; }
-  else if(is_binary_operator(i)) { throw "binary_operator"; }
+  else if(is_operator_expression(i)) { throw "operator_expression"; }
   else if(is_bit_field(i)) { throw "bit_field"; }
 //  else if(is_bounded_array_type(i)) { throw "bounded_array_type"; }
-  else if(is_cast(i)) { throw "cast"; }
+  else if(is_conversion(i)) { throw "conversion"; }
   else if(is_class_member(i)) { throw "class_member"; }
   else if(is_class_template(i)) { throw "class_template"; }
 //  else if(is_class_type(i)) { throw "class_type"; }
@@ -125,7 +125,6 @@ consteval void throwKind(std::meta::info i) {
 //  else if(is_trivially_move_constructible_type(i)) { throw "trivially_move_constructible_type"; }
 //  else if(is_type(i)) { throw "type"; }
   else if(is_type_alias(i)) { throw "type_alias"; }
-  else if(is_unary_operator(i)) { throw "unary_operator"; }
 //  else if(is_unbounded_array_type(i)) { throw "unbounded_array_type"; }
 //  else if(is_union_type(i)) { throw "union_type"; }
 //  else if(is_unsigned_type(i)) { throw "unsigned_type"; }
@@ -133,7 +132,7 @@ consteval void throwKind(std::meta::info i) {
   else if(is_user_provided(i)) { throw "user_provided"; }
   else if(is_value(i)) { throw "value"; }
   else if(is_variable(i)) { throw "variable"; }
-  else if(is_variable_reference(i)) { throw "variable_reference"; }
+  else if(is_id_expression(i)) { throw "id_expression"; }
   else if(is_variable_template(i)) { throw "variable_template"; }
   else if(is_virtual(i)) { throw "virtual"; }
 //  else if(is_void_type(i)) { throw "void_type"; }

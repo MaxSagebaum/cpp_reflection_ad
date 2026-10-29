@@ -1,22 +1,14 @@
+#pragma once
+
 #include <sstream>
 #include <fstream>
 #include <ranges>
 #include <iostream>
 #include <meta>
 
-#include "test_functions.hpp"
-#include "test_simple_include.hpp"
-#include "throwHelper.hpp"
-
+#include "throw_helper.hpp"
 
 #include "../autograd.h"
-
-
-char const results[] =
-{
-  #embed "results/base.hpp"
-  ,'\0'
-};
 
 using namespace std::meta;
 
@@ -70,8 +62,13 @@ struct ExpressionAnalysis {
     info exp = ad::detail::stripCasts(e); // TODO: Handle casts.
 
     std::string r = "";
-    if (is_binary_operator(exp)) {
+    if (is_operator_expression(exp)) {
       auto operands = operands_of(exp);
+
+      if (operands.size() != 2) {
+        throw "Only binary handling for now"; // TODO: Implement
+      }
+
       OperatorInfo op = getOperatorInfo(expression_operator_of(exp));
       r += join(
         ExpressionAnalysis::generatePrimal(operands[0]),
@@ -81,7 +78,7 @@ struct ExpressionAnalysis {
         ExpressionAnalysis::generatePrimal(operands[1]));
     } else if (is_literal(exp)) {
       r += display_string_of(constant_of(exp));
-    } else if (is_variable_reference(exp)) {
+    } else if (is_id_expression(exp)) {
       r += identifier_of(declaration_of(exp));
     } else {
       throwKind(exp);
@@ -94,8 +91,13 @@ struct ExpressionAnalysis {
     info exp = ad::detail::stripCasts(e); // TODO: Handle casts.
 
     std::string r = "";
-    if (is_binary_operator(exp)) {
+    if (is_operator_expression(exp)) {
       auto operands = operands_of(exp);
+
+      if (operands.size() != 2) {
+        throw "Only binary handling for now"; // TODO: Implement
+      }
+
       OperatorInfo op = getOperatorInfo(expression_operator_of(exp));
 
       if (op.kind == OperatorKind::Assign) {
@@ -121,7 +123,7 @@ struct ExpressionAnalysis {
       }
     } else if (is_literal(exp)) {
       r += "0.0";
-    } else if (is_variable_reference(exp)) {
+    } else if (is_id_expression(exp)) {
       r += join(identifier_of(declaration_of(exp)), "_d");
     } else {
       throwKind(exp);
@@ -134,15 +136,20 @@ struct ExpressionAnalysis {
     info exp = ad::detail::stripCasts(e); // TODO: Handle casts.
 
     std::vector<std::string> list = {};
-    if (is_binary_operator(exp)) {
+    if (is_operator_expression(exp)) {
       auto operands = operands_of(exp);
+
+      if (operands.size() != 2) {
+        throw "Only binary handling for now"; // TODO: Implement
+      }
+
       OperatorInfo op = getOperatorInfo(expression_operator_of(exp));
       if (op.kind == OperatorKind::Assign) {
         list.push_back(ExpressionAnalysis::generatePrimal(operands[0]));
       }
     } else if (is_literal(exp)) {
       // Nothing
-    } else if (is_variable_reference(exp)) {
+    } else if (is_id_expression(exp)) {
       // Nothing
     } else {
       throwKind(exp);
@@ -154,8 +161,13 @@ struct ExpressionAnalysis {
   static consteval void generateReverse(info e, std::string adj, std::vector<std::string>& rev_updates, std::vector<std::string>& lhs_values) {
     info exp = ad::detail::stripCasts(e); // TODO: Handle casts.
 
-    if (is_binary_operator(exp)) {
+    if (is_operator_expression(exp)) {
       auto operands = operands_of(exp);
+
+      if (operands.size() != 2) {
+        throw "Only binary handling for now"; // TODO: Implement
+      }
+
       OperatorInfo op = getOperatorInfo(expression_operator_of(exp));
 
       if (op.kind == OperatorKind::Assign) {
@@ -174,7 +186,7 @@ struct ExpressionAnalysis {
       }
     } else if (is_literal(exp)) {
       // Nothing
-    } else if (is_variable_reference(exp)) {
+    } else if (is_id_expression(exp)) {
       rev_updates.push_back(join(identifier_of(declaration_of(exp)), "_b += ", adj));
     } else {
       throwKind(exp);
@@ -198,7 +210,7 @@ struct StatementAnalysis {
     } else if (is_expression_statement(stmt)) {
       r += ctx.format(ExpressionAnalysis::generatePrimal(expression_of(stmt)));
     } else if (is_return_statement(stmt)) {
-      r += ctx.format(join("return ", ExpressionAnalysis::generatePrimal(return_value_of(stmt))));
+      r += ctx.format(join("return ", ExpressionAnalysis::generatePrimal(return_operand_of(stmt))));
     } else {
       throwKind(stmt);
     }
@@ -223,9 +235,9 @@ struct StatementAnalysis {
     } else if (is_return_statement(stmt)) {
       r += ctx.format(join(
         "return std::make_pair(",
-        ExpressionAnalysis::generatePrimal(return_value_of(stmt)),
+        ExpressionAnalysis::generatePrimal(return_operand_of(stmt)),
         ", ",
-        ExpressionAnalysis::generateForward(return_value_of(stmt)),
+        ExpressionAnalysis::generateForward(return_operand_of(stmt)),
         ")"));
       add_primal = false;
     } else {
@@ -286,7 +298,7 @@ struct StatementAnalysis {
       ExpressionAnalysis::generateReverse(expression_of(stmt), "", reverse_stmts, lhs_values);
     } else if (is_return_statement(stmt)) {
       std::string adj = "ret_b";
-      ExpressionAnalysis::generateReverse(return_value_of(stmt), adj, reverse_stmts, lhs_values);
+      ExpressionAnalysis::generateReverse(return_operand_of(stmt), adj, reverse_stmts, lhs_values);
       lhs_values.push_back(adj);
     } else {
       throwKind(stmt);
@@ -421,39 +433,3 @@ struct FunctionAnalysis {
   }
 };
 
-int main(int nargs, char** args) {
-
-  std::string filename = "derivatives.hpp";
-
-  if (nargs >= 2) {
-    filename = args[1];
-  }
-
-  std::stringstream data = {};
-
-  static constexpr auto members = std::define_static_array(members_of( ^^test_functions, access_context::unchecked() ));
-
-  template for (constexpr auto member : members) {
-    if (is_function(member)) {
-      data << FunctionAnalysis::generatePrimal(member) << std::endl;
-      data << FunctionAnalysis::generateForward(member) << std::endl;
-      data << FunctionAnalysis::generateReverseJoined(member) << std::endl;
-    }
-  }
-
-  std::ofstream out(filename);
-  out << data.str();
-  out.close();
-
-  std::string result_str = results;
-  size_t min_size = std::min(data.str().size(), result_str.size());
-  for (size_t i = 0; i < min_size; i += 1) {
-    if (data.str()[i] != result_str[i]) {
-      std::cout << std::format("Difference at: {} ('{}' <-> '{}')", i, data.str()[i], result_str[i]) << std::endl;
-    }
-  }
-  EXPECT_EQUAL_ARRAY(data.str(), result_str);
-  std::cout << result_str << std::endl;
-
-  TEST_END;
-}
