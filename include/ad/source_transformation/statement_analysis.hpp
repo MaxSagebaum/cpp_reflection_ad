@@ -123,24 +123,36 @@ struct StatementAnalysis {
   }
 
   static consteval void generateReverse(info stmt, GenerationContext& ctx, bool generate_primal) {
+    ctx.reverse_generation = true;
+
     ReverseExpression rws_exp = {};
     if (m::is_declaration_statement(stmt)) {
       info v = declared_variable_of(stmt);
       std::string adj = su::join(m::identifier_of(v), "_b");
-      ExpressionAnalysis::generateReverse(initializer_of(v), adj, rws_exp, ctx);
-      rws_exp.lhs_values.push_back(adj);
+
+      if (m::is_function_call(initializer_of(v))) {
+        ExpressionAnalysis::generateReverseFunctionCall(m::initializer_of(v), adj, rws_exp, ctx);
+      } else {
+        ExpressionAnalysis::generateReverse(initializer_of(v), adj, rws_exp, ctx);
+        rws_exp.lhs_values.push_back(adj);
+      }
+      rws_exp.primal = su::join(m::display_string_of(m::type_of(v)), " ", m::identifier_of(v), " = ", rws_exp.primal, ";");
     } else if (m::is_expression_statement(stmt)) {
       ExpressionAnalysis::generateReverse(expression_of(stmt), "", rws_exp, ctx);
     } else if (m::is_return_statement(stmt)) {
       std::string adj = "ret_b";
       ExpressionAnalysis::generateReverse(return_operand_of(stmt), adj, rws_exp, ctx);
       rws_exp.lhs_values.push_back(adj);
+
+      rws_exp.primal = su::join("return ", rws_exp.primal);
     } else {
       throwKind(stmt);
     }
 
+    ctx.reverse_generation = false;
+
     if (generate_primal) {
-      ctx.addStatement(generatePrimal(stmt, ctx));
+      ctx.addStatement(rws_exp.primal);
     }
 
     for (std::string cur : rws_exp.lhs_values | std::views::reverse) {

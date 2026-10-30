@@ -19,6 +19,9 @@ struct GenerationContext {
   std::vector<std::meta::info> required_functions = {};
   std::vector<std::meta::info> handled_functions = {};
 
+  bool reverse_generation = false;
+  std::vector<std::string> function_temporary_stack = {};
+
   consteval std::string generateTemporary() {
     temporary_counter += 1;
     // TODO: use to_string: return "temp_" + std::to_string(temporary_counter);
@@ -75,6 +78,16 @@ struct GenerationContext {
   consteval std::vector<std::meta::info>  getRequiredFunctions() {
     std::vector<std::meta::info> r = {};
     std::swap(r, required_functions);
+    return r;
+  }
+
+  consteval void pushFunctionTemporary(std::string const& name) {
+    function_temporary_stack.push_back(name);
+  }
+
+  consteval std::string popFunctionTemporary() {
+    std::string r = function_temporary_stack.back();
+    function_temporary_stack.pop_back();
     return r;
   }
 

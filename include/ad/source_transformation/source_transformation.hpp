@@ -57,7 +57,7 @@ consteval auto handleNamespaceForward() {
 
   template for (constexpr auto member : members) {
     if (is_function(member)) { // TODO: Add ignore when attributes are available
-      std::string func =  ad::FunctionAnalysis::generateForward(member, ctx);
+      std::string func = ad::FunctionAnalysis::generateForward(member, ctx);
 
       // Add required functions bevor the function is added.
       r += addRequiredFunctionsForward(ctx);
@@ -69,15 +69,32 @@ consteval auto handleNamespaceForward() {
   return std::define_static_string(r);
 }
 
+consteval std::string addRequiredFunctionsReverse(GenerationContext& ctx) {
+  std::string r = {};
+
+  std::vector<info> functions = ctx.getRequiredFunctions();
+  for (info func : functions) {
+    r += ad::FunctionAnalysis::generateReverseJoined(func, ctx); // TODO: Handle split functions
+    r += "\n";
+  }
+
+  return r;
+}
+
 template<info o>
 consteval auto handleNamespaceReverse() {
   static constexpr auto members = std::define_static_array(ad::m::members_of( o, ad::m::access_context::unchecked() ));
+  GenerationContext ctx = {};
 
   std::string r = {};
   template for (constexpr auto member : members) {
     if (is_function(member)) { // TODO: Add ignore when attributes are available
-      r += ad::FunctionAnalysis::generateReverseJoined(member);
-      r += "\n";
+      std::string func = ad::FunctionAnalysis::generateReverseJoined(member, ctx);
+
+      // Add required functions bevor the function is added.
+      r += addRequiredFunctionsReverse(ctx);
+
+      r += func + "\n";
     }
   }
 
