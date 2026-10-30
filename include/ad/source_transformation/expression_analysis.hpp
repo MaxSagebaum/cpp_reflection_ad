@@ -23,6 +23,11 @@ struct ForwardExpression {
   std::string fwd;
 };
 
+struct ReverseExpression {
+  std::vector<std::string> reverse_stmts = {};
+  std::vector<std::string> lhs_values = {};
+};
+
 struct ExpressionAnalysis {
   static consteval std::ranges::range_value_t<std::string&> const* generatePrimal(info e) {
     info exp = ad::detail::stripCasts(e); // TODO: Handle casts.
@@ -167,6 +172,9 @@ struct ExpressionAnalysis {
       // Nothing
     } else if (m::is_id_expression(exp)) {
       // Nothing
+    } else if (m::is_function_call(exp)) {
+      // Nothing
+      // TODO: Add out and inout arguments of function.
     } else {
       throwKind(exp);
     }
@@ -174,7 +182,7 @@ struct ExpressionAnalysis {
     return list;
   }
 
-  static consteval void generateReverse(info e, std::string adj, std::vector<std::string>& rev_updates, std::vector<std::string>& lhs_values) {
+  static consteval void generateReverse(info e, std::string adj, ReverseExpression& data, GenerationContext& ctx) {
     info exp = ad::detail::stripCasts(e); // TODO: Handle casts.
 
     if (m::is_operator_expression(exp)) {
@@ -192,18 +200,18 @@ struct ExpressionAnalysis {
         }
 
         std::string adj = su::join(generatePrimal(operands[0]), "_b"); // TODO: Remove shortcut that might fail  e.g. a[0] -> a[0]_b
-        generateReverse(operands[1], adj, rev_updates, lhs_values);
-        lhs_values.push_back(adj);
+        generateReverse(operands[1], adj, data, ctx);
+        data.lhs_values.push_back(adj);
       } else if (op.kind == OperatorKind::Mul) {
-        generateReverse(operands[0], su::join("(", generatePrimal(operands[1]), ") * ", adj), rev_updates, lhs_values);
-        generateReverse(operands[1], su::join("(", generatePrimal(operands[0]), ") * ", adj), rev_updates, lhs_values);
+        generateReverse(operands[0], su::join("(", generatePrimal(operands[1]), ") * ", adj), data, ctx);
+        generateReverse(operands[1], su::join("(", generatePrimal(operands[0]), ") * ", adj), data, ctx);
       } else {
         throw "Unkown operator";
       }
     } else if (m::is_literal(exp)) {
       // Nothing
     } else if (m::is_id_expression(exp)) {
-      rev_updates.push_back(su::join(m::identifier_of(declaration_of(exp)), "_b += ", adj));
+      data.reverse_stmts.push_back(su::join(m::identifier_of(declaration_of(exp)), "_b += ", adj));
     } else {
       throwKind(exp);
     }

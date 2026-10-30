@@ -36,7 +36,7 @@ struct FunctionAnalysis {
 
     ctx.addIndent();
     for (info stmt : m::statements_of(m::body_of(func))) {
-      r += StatementAnalysis::generatePrimal(stmt, ctx);
+      r += ctx.format(StatementAnalysis::generatePrimal(stmt, ctx) + "\n");
     }
     ctx.removeIndent();
     r += "}\n";
@@ -94,22 +94,19 @@ struct FunctionAnalysis {
 
     ctx.addIndent();
     for (info stmt : m::statements_of(m::body_of(func))) {
-      if (m::is_return_statement(stmt)) {
-        // Handling of return statements is not required.
-        continue;
-      }
+      bool is_return = m::is_return_statement(stmt);
 
-      r += StatementAnalysis::generateStore(stmt, ctx);
-      r += StatementAnalysis::generateReverseDecl(stmt, ctx);
-      r += StatementAnalysis::generatePrimal(stmt, ctx);
+      StatementAnalysis::generateStore(stmt, ctx);
+      StatementAnalysis::generateReverseDecl(stmt, ctx);
+      StatementAnalysis::generateReverse(stmt, ctx, !is_return);
+      StatementAnalysis::generateRestore(stmt, ctx);
+      ctx.addReverseStatement(su::join("//", StatementAnalysis::generatePrimal(stmt, ctx)));
+      ctx.addReverseStatement("");
     }
 
-    for (info stmt : m::statements_of(m::body_of(func)) | std::views::reverse ) {
-      r += "\n";
-      r += su::join("//", StatementAnalysis::generatePrimal(stmt, ctx));
-      r += StatementAnalysis::generateRestore(stmt, ctx);
-      r += StatementAnalysis::generateReverse(stmt, ctx);
-    }
+    r += ctx.flushStatements();
+    r += ctx.flushReverseStatements();
+
     ctx.removeIndent();
     r += "}\n";
 

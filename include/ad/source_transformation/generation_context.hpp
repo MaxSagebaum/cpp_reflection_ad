@@ -1,5 +1,7 @@
 #pragma once
 
+#include <ranges>
+
 #include <meta>
 #include <string>
 #include <vector>
@@ -12,6 +14,8 @@ struct GenerationContext {
 
   std::string statements = {};
 
+  std::vector<std::string> reverse_statements = {};
+
   std::vector<std::meta::info> required_functions = {};
   std::vector<std::meta::info> handled_functions = {};
 
@@ -22,6 +26,9 @@ struct GenerationContext {
   }
 
   consteval std::string format(std::string line) {
+    if (line.empty()) {
+      return "";
+    }
     return indent + line;
   }
 
@@ -29,9 +36,22 @@ struct GenerationContext {
     statements += format(stmt) + "\n";
   }
 
+  consteval void addReverseStatement(std::string stmt) {
+    reverse_statements.push_back(format(stmt) + "\n");
+  }
+
   consteval std::string flushStatements() {
     std::string r = {};
     std::swap(r, statements);
+    return r;
+  }
+
+  consteval std::string flushReverseStatements() {
+    std::string r = {};
+    for (std::string const& cur : reverse_statements |  std::views::reverse) {
+      r += cur;
+    }
+    reverse_statements.clear();
     return r;
   }
 

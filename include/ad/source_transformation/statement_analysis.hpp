@@ -17,26 +17,27 @@ namespace m = ad::meta;
 namespace su = ad::string_util;
 
 struct StatementAnalysis {
-  static consteval std::ranges::range_value_t<std::string&> const* generatePrimal(info stmt, GenerationContext& ctx) {
+  static consteval std::string generatePrimal(info stmt, GenerationContext& ctx) {
+    (void)ctx;
     std::string r = "";
     if (m::is_declaration_statement(stmt)) {
       info v = declared_variable_of(stmt);
-      r += ctx.format(su::join(
+      r += su::join(
         m::display_string_of(m::type_of(v)),
         " ",
         m::identifier_of(v),
         " = ",
-        ExpressionAnalysis::generatePrimal(initializer_of(v))));
+        ExpressionAnalysis::generatePrimal(initializer_of(v)));
     } else if (m::is_expression_statement(stmt)) {
-      r += ctx.format(ExpressionAnalysis::generatePrimal(expression_of(stmt)));
+      r += ExpressionAnalysis::generatePrimal(expression_of(stmt));
     } else if (m::is_return_statement(stmt)) {
-      r += ctx.format(su::join("return ", ExpressionAnalysis::generatePrimal(return_operand_of(stmt))));
+      r += su::join("return ", ExpressionAnalysis::generatePrimal(return_operand_of(stmt)));
     } else {
       throwKind(stmt);
     }
 
-    r += ";\n";
-    return std::define_static_string(r);
+    r += ";";
+    return r;
   }
 
   static consteval void generateForward(info stmt, GenerationContext& ctx) {
@@ -91,78 +92,74 @@ struct StatementAnalysis {
     }
   }
 
-  static consteval std::ranges::range_value_t<std::string&> const* generateStore(info stmt, GenerationContext& ctx) {
-    std::string r = "";
+  static consteval void generateStore(info stmt, GenerationContext& ctx) {
     if (m::is_declaration_statement(stmt)) {
       // Nothing
     } else if (m::is_expression_statement(stmt)) {
       std::vector<std::string> overwrites = ExpressionAnalysis::listOverwrites(expression_of(stmt));
       for (std::string cur : overwrites) {
-        r += ctx.format(su::join("store(", cur, ");\n"));
+        ctx.addStatement(su::join("store(", cur, ");"));
       }
     } else if (m::is_return_statement(stmt)) {
       // Nothing
     } else {
       throwKind(stmt);
     }
-    return std::define_static_string(r);
   }
 
-  static consteval std::ranges::range_value_t<std::string&> const* generateRestore(info stmt, GenerationContext& ctx) {
-    std::string r = "";
+  static consteval void generateRestore(info stmt, GenerationContext& ctx) {
     if (m::is_declaration_statement(stmt)) {
       // Nothing
     } else if (m::is_expression_statement(stmt)) {
       std::vector<std::string> overwrites = ExpressionAnalysis::listOverwrites(expression_of(stmt));
-      for (std::string cur : overwrites | std::views::reverse) {
-        r += ctx.format(su::join("restore(", cur, ");\n"));
+      for (std::string cur : overwrites) {
+        ctx.addReverseStatement(su::join("restore(", cur, ");"));
       }
     } else if (m::is_return_statement(stmt)) {
       // Nothing
     } else {
       throwKind(stmt);
     }
-    return std::define_static_string(r);
   }
 
-  static consteval std::ranges::range_value_t<std::string&> const* generateReverse(info stmt, GenerationContext& ctx) {
-    std::string r = "";
-    std::vector<std::string> reverse_stmts = {};
-    std::vector<std::string> lhs_values = {};
+  static consteval void generateReverse(info stmt, GenerationContext& ctx, bool generate_primal) {
+    ReverseExpression rws_exp = {};
     if (m::is_declaration_statement(stmt)) {
       info v = declared_variable_of(stmt);
       std::string adj = su::join(m::identifier_of(v), "_b");
-      ExpressionAnalysis::generateReverse(initializer_of(v), adj, reverse_stmts, lhs_values);
-      lhs_values.push_back(adj);
+      ExpressionAnalysis::generateReverse(initializer_of(v), adj, rws_exp, ctx);
+      rws_exp.lhs_values.push_back(adj);
     } else if (m::is_expression_statement(stmt)) {
-      ExpressionAnalysis::generateReverse(expression_of(stmt), "", reverse_stmts, lhs_values);
+      ExpressionAnalysis::generateReverse(expression_of(stmt), "", rws_exp, ctx);
     } else if (m::is_return_statement(stmt)) {
       std::string adj = "ret_b";
-      ExpressionAnalysis::generateReverse(return_operand_of(stmt), adj, reverse_stmts, lhs_values);
-      lhs_values.push_back(adj);
+      ExpressionAnalysis::generateReverse(return_operand_of(stmt), adj, rws_exp, ctx);
+      rws_exp.lhs_values.push_back(adj);
     } else {
       throwKind(stmt);
     }
 
-    for (std::string cur : reverse_stmts) {
-      r += ctx.format(su::join(cur, ";\n"));
-    }
-    for (std::string cur : lhs_values) {
-      r += ctx.format(su::join(cur, " = 0.0;\n"));
+    if (generate_primal) {
+      ctx.addStatement(generatePrimal(stmt, ctx));
     }
 
-    return std::define_static_string(r);
+    for (std::string cur : rws_exp.lhs_values | std::views::reverse) {
+      ctx.addReverseStatement(su::join(cur, " = 0.0;"));
+    }
+    for (std::string cur : rws_exp.reverse_stmts | std::views::reverse) {
+      ctx.addReverseStatement(su::join(cur, ";"));
+    }
+
   }
 
-  static consteval std::ranges::range_value_t<std::string&> const* generateReverseDecl(info stmt, GenerationContext& ctx) {
-    std::string r = "";
+  static consteval void generateReverseDecl(info stmt, GenerationContext& ctx) {
     if (m::is_declaration_statement(stmt)) {
       info v = declared_variable_of(stmt);
-      r += ctx.format(su::join(
+      ctx.addStatement(su::join(
         m::display_string_of(m::type_of(v)),
         " ",
         m::identifier_of(v),
-        "_b = 0.0;\n"));
+        "_b = 0.0;"));
     } else if (m::is_expression_statement(stmt)) {
       // Nothing
     } else if (m::is_return_statement(stmt)) {
@@ -170,8 +167,6 @@ struct StatementAnalysis {
     } else {
       throwKind(stmt);
     }
-
-    return std::define_static_string(r);
   }
 };
 
