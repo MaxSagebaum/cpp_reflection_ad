@@ -27,11 +27,11 @@ struct StatementAnalysis {
         " ",
         m::identifier_of(v),
         " = ",
-        ExpressionAnalysis::generatePrimal(initializer_of(v)));
+        ExpressionAnalysis::generatePrimal(initializer_of(v), ctx));
     } else if (m::is_expression_statement(stmt)) {
-      r += ExpressionAnalysis::generatePrimal(expression_of(stmt));
+      r += ExpressionAnalysis::generatePrimal(expression_of(stmt), ctx);
     } else if (m::is_return_statement(stmt)) {
-      r += su::join("return ", ExpressionAnalysis::generatePrimal(return_operand_of(stmt)));
+      r += su::join("return ", ExpressionAnalysis::generatePrimal(return_operand_of(stmt), ctx));
     } else {
       throwKind(stmt);
     }
@@ -96,7 +96,7 @@ struct StatementAnalysis {
     if (m::is_declaration_statement(stmt)) {
       // Nothing
     } else if (m::is_expression_statement(stmt)) {
-      std::vector<std::string> overwrites = ExpressionAnalysis::listOverwrites(expression_of(stmt));
+      std::vector<std::string> overwrites = ExpressionAnalysis::listOverwrites(expression_of(stmt), ctx);
       for (std::string cur : overwrites) {
         ctx.addStatement(su::join("store(", cur, ");"));
       }
@@ -111,7 +111,7 @@ struct StatementAnalysis {
     if (m::is_declaration_statement(stmt)) {
       // Nothing
     } else if (m::is_expression_statement(stmt)) {
-      std::vector<std::string> overwrites = ExpressionAnalysis::listOverwrites(expression_of(stmt));
+      std::vector<std::string> overwrites = ExpressionAnalysis::listOverwrites(expression_of(stmt), ctx);
       for (std::string cur : overwrites) {
         ctx.addReverseStatement(su::join("restore(", cur, ");"));
       }

@@ -29,7 +29,7 @@ struct ReverseExpression {
 };
 
 struct ExpressionAnalysis {
-  static consteval std::ranges::range_value_t<std::string&> const* generatePrimal(info e) {
+  static consteval std::ranges::range_value_t<std::string&> const* generatePrimal(info e, GenerationContext& ctx) {
     info exp = ad::detail::stripCasts(e); // TODO: Handle casts.
 
     std::string r = "";
@@ -42,11 +42,11 @@ struct ExpressionAnalysis {
 
       OperatorInfo op = getOperatorInfo(m::expression_operator_of(exp));
       r += su::join(
-        ExpressionAnalysis::generatePrimal(operands[0]),
+        ExpressionAnalysis::generatePrimal(operands[0], ctx),
         " ",
         op.symbol,
         " ",
-        ExpressionAnalysis::generatePrimal(operands[1]));
+        ExpressionAnalysis::generatePrimal(operands[1], ctx));
     } else if (m::is_literal(exp)) {
       r += m::display_string_of(constant_of(exp));
     } else if (m::is_id_expression(exp)) {
@@ -57,7 +57,7 @@ struct ExpressionAnalysis {
 
       std::string ops_s = "";
       for (info o : ops) {
-        ops_s += su::join(ops_s.size() ? ", " : "", ExpressionAnalysis::generatePrimal(o));
+        ops_s += su::join(ops_s.size() ? ", " : "", ExpressionAnalysis::generatePrimal(o, ctx));
       }
 
       r += su::join(name, "(", ops_s , ")");
@@ -114,10 +114,10 @@ struct ExpressionAnalysis {
         }
       }
     } else if (m::is_literal(exp)) {
-      r.primal = generatePrimal(exp);
+      r.primal = generatePrimal(exp, ctx);
       r.fwd += "0.0";
     } else if (m::is_id_expression(exp)) {
-      r.primal = generatePrimal(exp);
+      r.primal = generatePrimal(exp, ctx);
       r.fwd = su::join(r.primal, "_d");
     } else if (m::is_function_call(exp)) {
       ForwardExpression call_exp = generateForwardFunctionCall(exp, ctx);
@@ -153,7 +153,7 @@ struct ExpressionAnalysis {
     return r;
   }
 
-  static consteval std::vector<std::string> listOverwrites(info e) {
+  static consteval std::vector<std::string> listOverwrites(info e, GenerationContext ctx) {
     info exp = ad::detail::stripCasts(e); // TODO: Handle casts.
 
     std::vector<std::string> list = {};
@@ -166,7 +166,7 @@ struct ExpressionAnalysis {
 
       OperatorInfo op = getOperatorInfo(m::expression_operator_of(exp));
       if (op.kind == OperatorKind::Assign) {
-        list.push_back(ExpressionAnalysis::generatePrimal(operands[0]));
+        list.push_back(ExpressionAnalysis::generatePrimal(operands[0], ctx));
       }
     } else if (m::is_literal(exp)) {
       // Nothing
@@ -199,12 +199,12 @@ struct ExpressionAnalysis {
           throw "Adjoint needs to be zero for assignment operators.";
         }
 
-        std::string adj = su::join(generatePrimal(operands[0]), "_b"); // TODO: Remove shortcut that might fail  e.g. a[0] -> a[0]_b
+        std::string adj = su::join(generatePrimal(operands[0], ctx), "_b"); // TODO: Remove shortcut that might fail  e.g. a[0] -> a[0]_b
         generateReverse(operands[1], adj, data, ctx);
         data.lhs_values.push_back(adj);
       } else if (op.kind == OperatorKind::Mul) {
-        generateReverse(operands[0], su::join("(", generatePrimal(operands[1]), ") * ", adj), data, ctx);
-        generateReverse(operands[1], su::join("(", generatePrimal(operands[0]), ") * ", adj), data, ctx);
+        generateReverse(operands[0], su::join("(", generatePrimal(operands[1], ctx), ") * ", adj), data, ctx);
+        generateReverse(operands[1], su::join("(", generatePrimal(operands[0], ctx), ") * ", adj), data, ctx);
       } else {
         throw "Unkown operator";
       }
