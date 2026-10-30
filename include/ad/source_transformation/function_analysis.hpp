@@ -44,8 +44,7 @@ struct FunctionAnalysis {
     return std::define_static_string(r);
   }
 
-  static consteval auto generateForward(info func) {
-    GenerationContext ctx = {};
+  static consteval auto generateForward(info func, GenerationContext& ctx) {
     std::string r = "";
     info ret_type = m::return_type_of(func);
     auto params = m::parameters_of(func);

@@ -130,7 +130,9 @@ struct ExpressionAnalysis {
   static consteval ForwardExpression generateForwardFunctionCall(info exp, GenerationContext& ctx) {
     ForwardExpression r = {};
     auto ops = m::operands_of(exp);
-    std::string_view name = m::identifier_of(m::declaration_of(m::callee_of(exp)));
+    info decl = m::declaration_of(m::callee_of(exp));
+    ctx.addRequiredFunction(decl);
+    std::string_view name = m::identifier_of(decl);
 
     std::string ops_s_primal = "";
     std::string ops_s_fwd = "";

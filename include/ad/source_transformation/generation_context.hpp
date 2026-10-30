@@ -1,6 +1,8 @@
 #pragma once
 
+#include <meta>
 #include <string>
+#include <vector>
 
 namespace ad {
 
@@ -10,11 +12,15 @@ struct GenerationContext {
 
   std::string statements = {};
 
+  std::vector<std::meta::info> required_functions = {};
+  std::vector<std::meta::info> handled_functions = {};
+
   consteval std::string generateTemporary() {
     temporary_counter += 1;
     // TODO: use to_string: return "temp_" + std::to_string(temporary_counter);
     return "temp_" + int_to_string(temporary_counter);
   }
+
   consteval std::string format(std::string line) {
     return indent + line;
   }
@@ -35,6 +41,21 @@ struct GenerationContext {
 
   consteval void removeIndent() {
     indent = indent.substr(2);
+  }
+
+  consteval void addRequiredFunction(std::meta::info func) {
+    auto pos = std::find(handled_functions.begin(), handled_functions.end(), func);
+
+    if (pos == handled_functions.end()) {
+      handled_functions.push_back(func);
+      required_functions.push_back(func);
+    }
+  }
+
+  consteval std::vector<std::meta::info>  getRequiredFunctions() {
+    std::vector<std::meta::info> r = {};
+    std::swap(r, required_functions);
+    return r;
   }
 
 private:
