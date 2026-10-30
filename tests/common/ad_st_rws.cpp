@@ -21,16 +21,14 @@ int main(int nargs, char** args) {
     filename = args[1];
   }
 
-  std::stringstream data = {};
-
-  ad::handleNamespaceReverse<^^test_functions>(data);
+  std::string data = ad::handleNamespaceReverse<^^test_functions>();
 
   std::ofstream out(filename);
-  out << data.str();
+  out << data;
   out.close();
 
   std::string result_str = results;
-  stringCompare(data.str(), result_str);
+  stringCompare(data, result_str);
 
   TEST_END;
 }

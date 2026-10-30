@@ -20,15 +20,19 @@ consteval bool hasIgnore(info o) {
 #endif
 
 
-template<info o, typename Stream>
-void handleNamespacePrimal(Stream& out) {
+template<info o>
+consteval auto handleNamespacePrimal() {
   static constexpr auto members = std::define_static_array(ad::m::members_of( o, ad::m::access_context::unchecked() ));
 
+  std::string r = {};
   template for (constexpr auto member : members) {
     if (is_function(member)) { // TODO: Add ignore when attributes are available
-      out << ad::FunctionAnalysis::generatePrimal(member) << std::endl;
+      r += ad::FunctionAnalysis::generatePrimal(member);
+      r += "\n";
     }
   }
+
+  return std::define_static_string(r);
 }
 
 consteval std::string addRequiredFunctionsForward(GenerationContext& ctx) {
@@ -45,7 +49,7 @@ consteval std::string addRequiredFunctionsForward(GenerationContext& ctx) {
 }
 
 template<info o>
-consteval auto handleNamespaceForwardTemp() {
+consteval auto handleNamespaceForward() {
   static constexpr auto members = std::define_static_array(ad::m::members_of( o, ad::m::access_context::unchecked() ));
   GenerationContext ctx = {};
 
@@ -65,20 +69,19 @@ consteval auto handleNamespaceForwardTemp() {
   return std::define_static_string(r);
 }
 
-template<info o, typename Stream>
-void handleNamespaceForward(Stream& out) {
-  out << handleNamespaceForwardTemp<o>();
-}
-
-template<info o, typename Stream>
-void handleNamespaceReverse(Stream& out) {
+template<info o>
+consteval auto handleNamespaceReverse() {
   static constexpr auto members = std::define_static_array(ad::m::members_of( o, ad::m::access_context::unchecked() ));
 
+  std::string r = {};
   template for (constexpr auto member : members) {
     if (is_function(member)) { // TODO: Add ignore when attributes are available
-      out << ad::FunctionAnalysis::generateReverseJoined(member) << std::endl;
+      r += ad::FunctionAnalysis::generateReverseJoined(member);
+      r += "\n";
     }
   }
+
+  return std::define_static_string(r);
 }
 
 }
